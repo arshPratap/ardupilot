@@ -18,14 +18,12 @@
 
 // total up and check overflow
 // check size of group var_info
-
 /// @file   AP_Param.cpp
 /// @brief  The AP variable store.
 #include "AP_Param.h"
-
 #include <cmath>
 #include <string.h>
-
+#include <unordered_map>
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
@@ -240,16 +238,13 @@ bool AP_Param::check_group_info(const struct AP_Param::GroupInfo *  group_info,
 }
 
 // check for duplicate key values
-bool AP_Param::duplicate_key(uint16_t vindex, uint16_t key)
+bool duplicate_key(std::unordered_map<uint16_t,uint16_t> &m,uint16_t key)
 {
-    for (uint16_t i=vindex+1; i<_num_vars; i++) {
-        uint16_t key2 = _var_info[i].key;
-        if (key2 == key) {
-            // no duplicate keys allowed
-            return true;
-        }
+    if(m.find(key)==m.end()){
+        m[key]++;
+        return false;
     }
-    return false;
+    return true;
 }
 
 /*
@@ -278,7 +273,7 @@ const struct AP_Param::GroupInfo *AP_Param::get_group_info(const struct Info &in
 bool AP_Param::check_var_info(void)
 {
     uint16_t total_size = sizeof(struct EEPROM_header);
-
+    std::unordered_map<uint16_t,uint16_t> um;
     for (uint16_t i=0; i<_num_vars; i++) {
         uint8_t type = _var_info[i].type;
         uint16_t key = _var_info[i].key;
@@ -303,7 +298,7 @@ bool AP_Param::check_var_info(void)
             }
             total_size += size + sizeof(struct Param_header);
         }
-        if (duplicate_key(i, key)) {
+        if (duplicate_key(um, key)) {
             return false;
         }
         if (type != AP_PARAM_GROUP && (_var_info[i].flags & AP_PARAM_FLAG_POINTER)) {
