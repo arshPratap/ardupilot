@@ -197,6 +197,11 @@ bool AC_WPNav::get_wp_destination(Location& destination) const
     if (!AP::ahrs().get_origin(destination)) {
         return false;
     }
+    if (_terrain_alt==true) {
+        destination.change_alt_frame(Location::AltFrame::ABOVE_TERRAIN);
+    } else {
+        destination.change_alt_frame(Location::AltFrame::ABOVE_ORIGIN);
+    }
     destination.offset(dest.x*0.01f, dest.y*0.01f);
     destination.alt += dest.z;
     return true;
