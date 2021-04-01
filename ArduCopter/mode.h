@@ -840,7 +840,7 @@ public:
 
     void angle_control_start();
     void angle_control_run();
-
+    void send_msg_demo();
 protected:
 
     const char *name() const override { return "GUIDED"; }
