@@ -68,6 +68,7 @@
 #include <AC_Sprayer/AC_Sprayer.h>
 #include <AP_ADSB/AP_ADSB.h>
 #include <AP_Proximity/AP_Proximity.h>
+#include <AP_XRCE_Client/AP_XRCE_Client.h>
 
 // Configuration
 #include "defines.h"
@@ -462,6 +463,8 @@ private:
     AC_PosControl *pos_control;
     AC_WPNav *wp_nav;
     AC_Loiter *loiter_nav;
+
+    AP_XRCE_Client client;
 
 #if MODE_CIRCLE_ENABLED == ENABLED
     AC_Circle *circle_nav;
@@ -985,6 +988,8 @@ private:
 
 public:
     void failsafe_check();      // failsafe.cpp
+    void init_client();
+    void update_topics();
 };
 
 extern Copter copter;
