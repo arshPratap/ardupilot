@@ -163,6 +163,10 @@ submodules at specific revisions.
     g.add_option('--scripting-checks', action='store_true',
                  default=True,
                  help="Enable runtime scripting sanity checks")
+    
+    g.add_option('--enable-xrce', action='store_true',
+                 default=False,
+                 help="Enables and sets up ROS2 control")
 
     g = opt.ap_groups['linux']
 
@@ -275,10 +279,6 @@ def _collect_autoconfig_files(cfg):
                 cfg.hash = Utils.h_list((cfg.hash, f.read()))
                 cfg.files.append(p)
 
-def add_xrce_linkers(cfg):
-    cfg.env.STLIB_MARKER += ',-lmicrocdr,-lmicroxrcedds_client'
-    cfg.env.SHLIB_MARKER += ',-lmicrocdr,-lmicroxrcedds_client'
-
 def configure(cfg):
 	# we need to enable debug mode when building for gconv, and force it to sitl
     if cfg.options.board is None:
@@ -366,7 +366,7 @@ def configure(cfg):
         cfg.recurse('libraries/AP_Scripting')
 
     cfg.recurse('libraries/AP_GPS')
-
+    
     cfg.start_msg('Scripting runtime checks')
     if cfg.options.scripting_checks:
         cfg.end_msg('enabled')
@@ -415,9 +415,6 @@ def configure(cfg):
 
     # add in generated flags
     cfg.env.CXXFLAGS += ['-include', 'ap_config.h']
-
-    # add xrce linker flags in waf
-    add_xrce_linkers(cfg)
     
     _collect_autoconfig_files(cfg)
 
@@ -519,6 +516,8 @@ def _build_dynamic_sources(bld):
                 bld.bldnode.make_node('modules/uavcan/libuavcan/include/dsdlc_generated').abspath(),
             ]
         )
+    if bld.env.ENABLE_XRCE:    
+        print("Hello from build")
 
     def write_version_header(tsk):
         bld = tsk.generator.bld
@@ -540,6 +539,7 @@ def _build_common_taskgens(bld):
     # the tools and examples. This is the first step until the
     # dependency on the vehicles is reduced. Later we may consider
     # split into smaller pieces with well defined boundaries.
+    print("In build common taskgen--------------------------------")
     bld.ap_stlib(
         name='ap',
         ap_vehicle='UNKNOWN',
@@ -551,8 +551,10 @@ def _build_common_taskgens(bld):
 
     if bld.env.HAS_GBENCHMARK:
         bld.libbenchmark()
+    print("In build common taskgen exit--------------------------------")
 
 def _build_recursion(bld):
+    print("In build recursion--------------------------------------")
     common_dirs_patterns = [
         # TODO: Currently each vehicle also generate its own copy of the
         # libraries. Fix this, or at least reduce the amount of
@@ -593,6 +595,9 @@ def _build_recursion(bld):
 
     dirs_to_recurse.append('libraries/AP_Scripting')
 
+    if bld.env.ENABLE_XRCE:
+        dirs_to_recurse.append('libraries/AP_XRCE_Client')
+
     for p in hal_dirs_patterns:
         dirs_to_recurse += collect_dirs_to_recurse(
             bld,
@@ -606,8 +611,10 @@ def _build_recursion(bld):
 
     for d in dirs_to_recurse:
         bld.recurse(d)
+    print("in post build----------------------------")
 
 def _build_post_funs(bld):
+    print("in recursion build exit----------------------------")
     if bld.cmd == 'check':
         bld.add_post_fun(ardupilotwaf.test_summary)
     else:
@@ -615,6 +622,7 @@ def _build_post_funs(bld):
 
     if bld.env.SUBMODULE_UPDATE:
         bld.git_submodule_post_fun()
+    print("in post build exit----------------------------")
 
 def _load_pre_build(bld):
     '''allow for a pre_build() function in build modules'''
@@ -623,6 +631,7 @@ def _load_pre_build(bld):
         brd.pre_build(bld)    
 
 def build(bld):
+    print("IN BUILD-------------------------------------------------")
     config_hash = Utils.h_file(bld.bldnode.make_node('ap_config.h').abspath())
     bld.env.CCDEPS = config_hash
     bld.env.CXXDEPS = config_hash
@@ -658,6 +667,7 @@ def build(bld):
     _build_recursion(bld)
 
     _build_post_funs(bld)
+    print("Main wscript Exit---------------------------------------------------------------")
 
 ardupilotwaf.build_command('check',
     program_group_list='all',

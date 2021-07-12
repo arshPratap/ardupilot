@@ -67,7 +67,11 @@ class Board:
         # allow GCS disable for AP_DAL example
         if cfg.options.no_gcs:
             env.CXXFLAGS += ['-DHAL_NO_GCS=1']
-            
+        if cfg.options.enable_xrce:
+            cfg.recurse('libraries/AP_XRCE_Client')
+            env.ENABLE_XRCE=True
+        else:
+            env.ENABLE_XRCE=False    
         d = env.get_merged_dict()
         # Always prepend so that arguments passed in the command line get
         # the priority.

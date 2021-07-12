@@ -309,7 +309,7 @@ def ap_stlib(bld, **kw):
     kw['features'] = kw.get('features', []) + ['cxx', 'cxxstlib']
     kw['target'] = kw['name']
     kw['source'] = []
-
+    print(kw['name'])
     bld.stlib(**kw)
 
 _created_program_dirs = set()
@@ -476,6 +476,9 @@ def build_command(name,
                    targets=None,
                    program_group_list=[],
                    doc='build shortcut'):
+    print("All right in build command ---------------------------------->")
+    print(name)
+
     _build_commands[name] = dict(
         targets=targets,
         program_group_list=program_group_list,
@@ -484,6 +487,7 @@ def build_command(name,
     class context_class(Build.BuildContext):
         cmd = name
     context_class.__doc__ = doc
+    print("Exit--------------------------------------------------->")
 
 def _select_programs_from_group(bld):
     groups = bld.options.program_group
@@ -568,5 +572,7 @@ This option is only supported on macOS versions of clang.
 ''')
 
 def build(bld):
+    print("Here ------------------------------")
     bld.add_pre_fun(_process_build_command)
     bld.add_pre_fun(_select_programs_from_group)
+    print("Exit from apwaf exit----------------")

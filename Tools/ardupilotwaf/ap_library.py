@@ -112,9 +112,16 @@ def ap_library(bld, library, vehicle):
     # allow for dynamically generated sources in a library that inherit the
     # dependencies and includes
     if library in bld.env.AP_LIB_EXTRA_SOURCES:
-        for s in bld.env.AP_LIB_EXTRA_SOURCES[library]:
-            src.append(bld.bldnode.find_or_declare(os.path.join('libraries', library, s)))
-
+        print(type(library))
+        print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+        if bld.env.AP_LIB_EXTRA_SOURCES['AP_XRCE']:
+            print("it works")
+            for s in bld.env.AP_LIB_EXTRA_SOURCES['AP_XRCE']:
+                src.append(bld.bldnode.find_or_declare(s))
+        if bld.env.AP_LIB_EXTRA_SOURCES['AP_Scripting']:
+            print("Am i here------------------?XXXXXXXXXXXXXXXXXXX")
+            for s in bld.env.AP_LIB_EXTRA_SOURCES[library]:
+                src.append(bld.bldnode.find_or_declare(os.path.join('libraries', library, s)))
     if not common_tg:
         kw = dict(bld.env.AP_LIBRARIES_OBJECTS_KW)
         kw['features'] = kw.get('features', []) + ['ap_library_object']
