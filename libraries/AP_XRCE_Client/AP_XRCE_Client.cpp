@@ -47,7 +47,7 @@ bool AP_XRCE_Client::create()
     topic_id=uxr_object_id(0x01,UXR_TOPIC_ID);
     const char* topic_xml = "<dds>"
                                 "<topic>"
-                                    "<name>AP_INSTopic</name>"
+                                    "<name>rt/AP_INSTopic</name>"
                                     "<dataType>ardupilotmsgs::msg::dds_::APINS_</dataType>"
                                 "</topic>"
                             "</dds>";
@@ -62,7 +62,7 @@ bool AP_XRCE_Client::create()
                                 "<data_writer>"
                                     "<topic>"
                                         "<kind>NO_KEY</kind>"
-                                        "<name>AP_INSTopic</name>"
+                                        "<name>rt/AP_INSTopic</name>"
                                         "<dataType>ardupilotmsgs::msg::dds_::APINS_</dataType>"
                                     "</topic>"
                                 "</data_writer>"
