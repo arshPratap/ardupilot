@@ -831,7 +831,7 @@ void AP_Vehicle::check_motor_noise()
 }
 
 #if AP_DDS_ENABLED
-[[nodiscard]] bool AP_Vehicle::init_dds_client()
+bool AP_Vehicle::init_dds_client()
 {
     if (AP::serialmanager().have_serial(AP_SerialManager::SerialProtocol_DDS_XRCE, 0)) {
         dds_client = new AP_DDS_Client();
