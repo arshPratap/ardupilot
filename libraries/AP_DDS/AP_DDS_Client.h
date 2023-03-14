@@ -61,12 +61,12 @@ public:
 
     //! @brief Initialize the client's transport, uxr session, and IO stream(s)
     //! @return True on successful initialization, false on failure
-    [[nodiscard]] bool init();
+    bool init() WARN_IF_UNUSED; 
 
     //! @brief Set up the client's participants, data read/writes,
     //         publishers, subscribers
     //! @return True on successful creation, false on failure
-    [[nodiscard]] bool create();
+    bool create() WARN_IF_UNUSED;
 
     //! @brief Serialize the current data state and publish to to the IO stream(s)
     void write();
