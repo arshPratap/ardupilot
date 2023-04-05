@@ -2,8 +2,8 @@
 // with input from geometry_msgs/msg/TwistStamped.msg
 // generated code does not contain a copyright notice
 
-#include "Vector3.idl"
-#include "Header.idl"
+#include "geometry_msgs/msg/Vector3.idl"
+#include "std_msgs/msg/Header.idl"
 
 struct Twist {
   geometry_msgs::msg::Vector3 linear;
