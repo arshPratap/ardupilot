@@ -4,9 +4,9 @@
 
 #include "uxr/client/client.h"
 #include "ucdr/microcdr.h"
-#include "generated/Time.h"
+#include "builtin_interfaces/msg/Time.h"
 #include "AP_DDS_Generic_Fn_T.h"
-#include "generated/NavSatFix.h"
+#include "sensor_msgs/msg/NavSatFix.h"
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_HAL/Scheduler.h>

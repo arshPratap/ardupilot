@@ -8,7 +8,6 @@
 #include <GCS_MAVLink/GCS.h>
 
 #include "AP_DDS_Client.h"
-#include "generated/Time.h"
 
 static constexpr uint16_t DELAY_TIME_TOPIC_MS = 10;
 static constexpr uint16_t DELAY_NAV_SAT_FIX_TOPIC_MS = 1000;
