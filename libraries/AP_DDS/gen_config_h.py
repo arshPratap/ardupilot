@@ -31,7 +31,7 @@ config = {
 }
 
 defines = {
-    "UCLIENT_PROFILE_UDP": 0,
+    "UCLIENT_PROFILE_UDP": 1,
     "UCLIENT_PROFILE_TCP": 0,
     "UCLIENT_PROFILE_CAN": 0,
     "UCLIENT_PROFILE_SERIAL": 1,

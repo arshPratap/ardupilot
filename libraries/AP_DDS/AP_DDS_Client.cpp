@@ -17,8 +17,12 @@ AP_HAL::UARTDriver *dds_port;
 
 
 const AP_Param::GroupInfo AP_DDS_Client::var_info[]= {
-    //! @todo Params go here
-
+    // @Param: TRANSPORT_TYPE
+    // @DisplayName: DDS_TRANSPORT_TYPE
+    // @Description: Type of XRCE protocol to use
+    // @Values: 0:Serial,1:UDP
+    // @User: Standard
+    AP_GROUPINFO("TRANSPORT",1,AP_DDS_Client,ddsTransportType,1),
     AP_GROUPEND
 };
 
@@ -148,9 +152,7 @@ void AP_DDS_Client::main_loop(void)
     }
 }
 
-
-bool AP_DDS_Client::init()
-{
+bool AP_DDS_Client::ddsSerialInit(){
     AP_SerialManager *serial_manager = AP_SerialManager::get_singleton();
     dds_port = serial_manager->find_serial(AP_SerialManager::SerialProtocol_DDS_XRCE, 0);
     if (dds_port == nullptr) {
@@ -170,13 +172,50 @@ bool AP_DDS_Client::init()
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
     //TODO does this need to be inside the loop to handle reconnect?
     uxr_init_session(&session, &serial_transport.comm, uniqueClientKey);
+    return true;
+}
+
+bool AP_DDS_Client::ddsUdpInit(){
+    //TODO udp port to be configured for real hardware
+    
+    if (!uxr_init_udp_transport(&udp_transport,UXR_IPv4,ip,udpPort)) {
+        return false;
+    }
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:After UDP init transport ");
+    constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
+    //TODO does this need to be inside the loop to handle reconnect?
+    uxr_init_session(&session, &udp_transport.comm, uniqueClientKey);
+    return true;
+}
+
+bool AP_DDS_Client::init()
+{
+    bool initTransportStatus = false;
+    
+    if(ddsTransportType != 16){
+        //GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:To start Serial Initialization ");
+        initTransportStatus = ddsUdpInit();
+    }else{
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:To start UDP Initialization ");
+        initTransportStatus = ddsUdpInit();
+    }
+    if(!initTransportStatus){
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"OOPSIE DASIE ");
+        return false;
+    }
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:About to create session");
     while (!uxr_create_session(&session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
         hal.scheduler->delay(1000);
     }
 
-    reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-    reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+    if(ddsTransportType == DDS_SERIAL){
+        reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+    }else if(ddsTransportType == DDS_UDP){
+        reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_UDP,STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_UDP,STREAM_HISTORY);
+    }
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Init Complete");
 
@@ -306,8 +345,13 @@ void AP_DDS_Client::update()
  */
 extern "C" {
 #include <uxr/client/profile/transport/serial/serial_transport_platform.h>
+#include <uxr/client/profile/transport/ip/udp/udp_transport.h>
 }
-
+bool uxr_init_udp_transport(uxrUDPTransport* transport, uxrIpProtocol ip_protocol, const char* ip, const char* port)
+{
+    //! @todo Add error reporting
+    return true;
+}
 bool uxr_init_serial_platform(void* args, int fd, uint8_t remote_addr, uint8_t local_addr)
 {
     //! @todo Add error reporting
