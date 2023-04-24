@@ -126,9 +126,9 @@ const AP_Param::GroupInfo AP_Vehicle::var_info[] = {
 #endif
 
 #if AP_DDS_ENABLED
-    // @Group: XRCE
+    // @Group: DDS
     // @Path: ../AP_DDS/AP_DDS_Client.cpp
-    AP_SUBGROUPPTR(dds_client, "XRCE_", 18, AP_Vehicle, AP_DDS_Client),
+   AP_SUBGROUPINFO(dds_client, "DDS_", 18, AP_Vehicle, AP_DDS_Client),
 #endif
 
 #if AP_KDECAN_ENABLED
