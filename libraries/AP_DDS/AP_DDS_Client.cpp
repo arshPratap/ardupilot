@@ -307,9 +307,7 @@ bool AP_DDS_Client::ddsUdpInit(){
     if (!uxr_init_udp_transport(&udp_transport,UXR_IPv4,ip,udpPort)) {
         return false;
     }
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:After UDP init transport ");
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
-    //TODO does this need to be inside the loop to handle reconnect?
     uxr_init_session(&session, &udp_transport.comm, uniqueClientKey);
     return true;
 }
@@ -327,7 +325,6 @@ bool AP_DDS_Client::init()
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Transport Initialization failed");
         return false;
     }
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client:About to create session");
     while (!uxr_create_session(&session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
         hal.scheduler->delay(1000);
