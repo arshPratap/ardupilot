@@ -21,6 +21,10 @@
 #include <AP_Param/AP_Param.h>
 #define STREAM_HISTORY 8
 #define BUFFER_SIZE_SERIAL UXR_CONFIG_SERIAL_TRANSPORT_MTU * STREAM_HISTORY
+#define BUFFER_SIZE_UDP    UXR_CONFIG_UDP_TRANSPORT_MTU * STREAM_HISTORY
+
+#define DDS_SERIAL 0
+#define DDS_UDP    1
 
 extern const AP_HAL::HAL& hal;
 
@@ -28,6 +32,16 @@ class AP_DDS_Client
 {
 
 private:
+
+    // Transport type
+    AP_Int8 ddsTransportType;
+
+    // UDP port
+    char* udpPort = "2019";
+    // IP
+    char* ip = "127.0.0.1"; 
+    // UDP Allocation
+    uxrUDPTransport udp_transport;
 
     // Serial Allocation
     uxrSerialTransport serial_transport; // client uxr serial transport
@@ -64,6 +78,10 @@ private:
     // The last ms timestamp AP_DDS wrote a BatteryState message
     uint64_t last_battery_state_time_ms;
 
+    // Initialization function for serial transport
+    bool ddsSerialInit();
+    // Initialization function for udp transport
+    bool ddsUdpInit();
 
 public:
     // Constructor
