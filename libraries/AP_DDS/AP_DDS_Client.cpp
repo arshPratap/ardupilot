@@ -308,7 +308,7 @@ bool AP_DDS_Client::ddsSerialInit()
     }
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
     //TODO does this need to be inside the loop to handle reconnect?
-    uxr_init_session(&session, &serial_transport.comm, uniqueClientKey);
+    uxr_init_session(&uxr_session, &serial_transport.comm, uniqueClientKey);
     return true;
 }
 
@@ -322,7 +322,7 @@ bool AP_DDS_Client::ddsUdpInit()
         return false;
     }
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
-    uxr_init_session(&session, &udp_transport.comm, uniqueClientKey);
+    uxr_init_session(&uxr_session, &udp_transport.comm, uniqueClientKey);
     return true;
 }
 #endif // AP_DDS_UDP_ENABLED
@@ -344,24 +344,27 @@ bool AP_DDS_Client::init()
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Transport Initialization failed");
         return false;
     }
-    while (!uxr_create_session(&session)) {
+    while (!uxr_create_session(&uxr_session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
         hal.scheduler->delay(1000);
     }
 
-    reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
-    reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
+    reliable_in = uxr_create_input_reliable_stream(&uxr_session, input_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
+    reliable_out = uxr_create_output_reliable_stream(&uxr_session, output_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
 
     if (is_serial) {
-        reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-        reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+        reliable_in = uxr_create_input_reliable_stream(&uxr_session, input_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&uxr_session, output_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
     }
 #if AP_DDS_UDP_ENABLED
     else {
-        reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
-        reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
+        reliable_in = uxr_create_input_reliable_stream(&uxr_session, input_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&uxr_session, output_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
     }
 #endif
+    reliable_in = uxr_create_input_reliable_stream(&uxr_session,input_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+    reliable_out = uxr_create_output_reliable_stream(&uxr_session,output_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+    besteffort_in = uxr_create_input_best_effort_stream(&uxr_session);
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Init Complete");
 
@@ -378,7 +381,7 @@ bool AP_DDS_Client::create()
         .type = UXR_PARTICIPANT_ID
     };
     const char* participant_ref = "participant_profile";
-    const auto participant_req_id = uxr_buffer_create_participant_ref(&session, reliable_out, participant_id,0,participant_ref,UXR_REPLACE);
+    const auto participant_req_id = uxr_buffer_create_participant_ref(&uxr_session, reliable_out, participant_id,0,participant_ref,UXR_REPLACE);
 
     //Participant requests
     constexpr uint8_t nRequestsParticipant = 1;
@@ -387,7 +390,7 @@ bool AP_DDS_Client::create()
     constexpr int maxTimeMsPerRequestMs = 250;
     constexpr int requestTimeoutParticipantMs = nRequestsParticipant * maxTimeMsPerRequestMs;
     uint8_t statusParticipant[nRequestsParticipant];
-    if (!uxr_run_session_until_all_status(&session, requestTimeoutParticipantMs, requestsParticipant, statusParticipant, nRequestsParticipant)) {
+    if (!uxr_run_session_until_all_status(&uxr_session, requestTimeoutParticipantMs, requestsParticipant, statusParticipant, nRequestsParticipant)) {
         GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Participant session request failure");
         // TODO add a failure log message sharing the status results
         return false;
@@ -400,26 +403,44 @@ bool AP_DDS_Client::create()
             .type = UXR_TOPIC_ID
         };
         const char* topic_ref = topics[i].topic_profile_label;
-        const auto topic_req_id = uxr_buffer_create_topic_ref(&session,reliable_out,topic_id,participant_id,topic_ref,UXR_REPLACE);
-
-        // Publisher
-        const uxrObjectId pub_id = {
-            .id = topics[i].pub_id,
-            .type = UXR_PUBLISHER_ID
-        };
-        const char* pub_xml = "";
-        const auto pub_req_id = uxr_buffer_create_publisher_xml(&session,reliable_out,pub_id,participant_id,pub_xml,UXR_REPLACE);
-
-        // Data Writer
-        const char* data_writer_ref = topics[i].dw_profile_label;
-        const auto dwriter_req_id = uxr_buffer_create_datawriter_ref(&session,reliable_out,topics[i].dw_id,pub_id,data_writer_ref,UXR_REPLACE);
 
         // Status requests
         constexpr uint8_t nRequests = 3;
-        const uint16_t requests[nRequests] = {topic_req_id, pub_req_id, dwriter_req_id};
+        uint16_t requests[nRequests];
+        if (strlen(topics[i].dw_profile_label)) {
+            requests[0] = uxr_buffer_create_topic_ref(&uxr_session,reliable_out,topic_id,participant_id,topic_ref,UXR_REPLACE);
+
+            // Publisher
+            const uxrObjectId pub_id = {
+                .id = topics[i].pub_id,
+                .type = UXR_PUBLISHER_ID
+            };
+            const char* pub_xml = "";
+            requests[1] = uxr_buffer_create_publisher_xml(&uxr_session,reliable_out,pub_id,participant_id,pub_xml,UXR_REPLACE);
+
+            // Data Writer
+            const char* data_writer_ref = topics[i].dw_profile_label;
+            requests[2] =  uxr_buffer_create_datawriter_ref(&uxr_session,reliable_out,topics[i].dw_id,pub_id,data_writer_ref,UXR_REPLACE);
+        } else if (strlen(topics[i].dr_profile_label)) {
+            requests[0] = uxr_buffer_create_topic_ref(&uxr_session,reliable_in,topic_id,participant_id,topic_ref,UXR_REPLACE);
+
+            // Subscriber
+            const uxrObjectId sub_id = {
+                .id = topics[i].pub_id,
+                .type = UXR_SUBSCRIBER_ID
+            };
+            const char* sub_xml = "";
+            requests[1] = uxr_buffer_create_subscriber_xml(&uxr_session,reliable_out,sub_id,participant_id,sub_xml,UXR_REPLACE);
+
+            // Data Reader
+            const char* data_reader_ref = topics[i].dr_profile_label;
+            requests[2] =  uxr_buffer_create_datareader_ref(&uxr_session,reliable_out,topics[i].dw_id,sub_id,data_reader_ref,UXR_REPLACE);
+
+        }
+
         constexpr int requestTimeoutMs = nRequests * maxTimeMsPerRequestMs;
         uint8_t status[nRequests];
-        if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
+        if (!uxr_run_session_until_all_status(&uxr_session, requestTimeoutMs, requests, status, nRequests)) {
             GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Pub/Writer session request failure for index 'TODO'");
             for (int s = 0 ; s < nRequests; s++) {
                 GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
@@ -427,9 +448,15 @@ bool AP_DDS_Client::create()
             // TODO add a failure log message sharing the status results
             return false;
         } else {
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Pub/Writer session pass for index 'TOOO'");
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Pub/Writer session passed");
         }
     }
+
+    uxrDeliveryControl delivery_control = {0}; // TODO tune this
+    delivery_control.max_samples = UXR_MAX_SAMPLES_UNLIMITED;
+    const auto datareader_id = topics[3].dw_id;
+    uxr_buffer_request_data(&uxr_session, reliable_out, datareader_id, besteffort_in, &delivery_control);
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Buffer request data complete");
 
     return true;
 }
@@ -440,7 +467,7 @@ void AP_DDS_Client::write_time_topic()
     if (connected) {
         ucdrBuffer ub;
         const uint32_t topic_size = builtin_interfaces_msg_Time_size_of_topic(&time_topic, 0);
-        uxr_prepare_output_stream(&session,reliable_out,topics[0].dw_id,&ub,topic_size);
+        uxr_prepare_output_stream(&uxr_session,reliable_out,topics[0].dw_id,&ub,topic_size);
         const bool success = builtin_interfaces_msg_Time_serialize_topic(&ub, &time_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -455,7 +482,7 @@ void AP_DDS_Client::write_nav_sat_fix_topic()
     if (connected) {
         ucdrBuffer ub;
         const uint32_t topic_size = sensor_msgs_msg_NavSatFix_size_of_topic(&nav_sat_fix_topic, 0);
-        uxr_prepare_output_stream(&session,reliable_out,topics[1].dw_id,&ub,topic_size);
+        uxr_prepare_output_stream(&uxr_session,reliable_out,topics[1].dw_id,&ub,topic_size);
         const bool success = sensor_msgs_msg_NavSatFix_serialize_topic(&ub, &nav_sat_fix_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -470,7 +497,7 @@ void AP_DDS_Client::write_static_transforms()
     if (connected) {
         ucdrBuffer ub;
         const uint32_t topic_size = tf2_msgs_msg_TFMessage_size_of_topic(&static_transforms_topic, 0);
-        uxr_prepare_output_stream(&session,reliable_out,topics[2].dw_id,&ub,topic_size);
+        uxr_prepare_output_stream(&uxr_session,reliable_out,topics[2].dw_id,&ub,topic_size);
         const bool success = tf2_msgs_msg_TFMessage_serialize_topic(&ub, &static_transforms_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -485,7 +512,7 @@ void AP_DDS_Client::write_battery_state_topic()
     if (connected) {
         ucdrBuffer ub;
         const uint32_t topic_size = sensor_msgs_msg_BatteryState_size_of_topic(&battery_state_topic, 0);
-        uxr_prepare_output_stream(&session,reliable_out,topics[3].dw_id,&ub,topic_size);
+        uxr_prepare_output_stream(&uxr_session,reliable_out,topics[3].dw_id,&ub,topic_size);
         const bool success = sensor_msgs_msg_BatteryState_serialize_topic(&ub, &battery_state_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -510,8 +537,6 @@ void AP_DDS_Client::update()
         write_nav_sat_fix_topic();
     }
 
-
-
     if (cur_time_ms - last_battery_state_time_ms > DELAY_BATTERY_STATE_TOPIC_MS) {
         constexpr uint8_t battery_instance = 0;
         update_topic(battery_state_topic, battery_instance);
@@ -519,7 +544,30 @@ void AP_DDS_Client::update()
         write_battery_state_topic();
     }
 
-    connected = uxr_run_session_time(&session, 1);
+    connected = uxr_run_session_time(&uxr_session, 1);
+}
+
+void AP_DDS_Client::on_topic(
+        uxrSession* session,
+        uxrObjectId object_id,
+        uint16_t request_id,
+        uxrStreamId stream_id,
+        struct ucdrBuffer* ub,
+        uint16_t length,
+        void* args)
+{
+    (void) session; (void) object_id; (void) request_id; (void) stream_id; (void) length;
+
+    // HelloWorld topic;
+    // HelloWorld_deserialize_topic(ub, &topic);
+    // printf("Recieved data on DDS\n");
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"Recieved Data");
+    // printf("Received topic: %s, id: %i\n", topic.message, topic.index);
+
+    // See AP_HAL::RCInput
+
+    uint32_t* count_ptr = (uint32_t*) args;
+    (*count_ptr)++;
 }
 
 #if CONFIG_HAL_BOARD != HAL_BOARD_SITL

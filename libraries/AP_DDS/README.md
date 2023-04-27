@@ -133,11 +133,13 @@ After your setups are complete, do the following:
 - Run the microROS agent
   ```bash
   cd ardupilot/libraries/AP_DDS
-  ros2 run micro_ros_agent micro_ros_agent serial -b 115200 -D /dev/pts/2  -r dds_xrce_profile.xml # (assuming we are using tty/pts/2 for DDS Application)
+  # (assuming we are using tty/pts/2 for DDS Application)
+  ros2 run micro_ros_agent micro_ros_agent serial -b 115200 -r dds_xrce_profile.xml  -D /dev/pts/2 
   ```
 - Run SITL (remember to kill any terminals running ardupilot SITL beforehand)
   ```bash
-  sim_vehicle.py -v ArduPlane -D --console --enable-dds -A "--uartC=uart:/dev/pts/1" # (assuming we are using /dev/pts/1 for Ardupilot SITL)
+  # (assuming we are using /dev/pts/1 for Ardupilot SITL)
+  sim_vehicle.py -v ArduPlane --console --enable-dds -A "--uartC=uart:/dev/pts/1" 
   ```
 - You should be able to see the agent here and view the data output.
   ```bash
