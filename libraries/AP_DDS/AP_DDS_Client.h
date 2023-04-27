@@ -48,13 +48,12 @@ private:
 
     // Serial Allocation
     uxrSerialTransport serial_transport; // client uxr serial transport
-    uxrSession uxr_session; //Session
+    uxrSession session; //Session
     bool is_serial;
 
     // Input Stream
     uint8_t input_reliable_stream[BUFFER_SIZE_SERIAL];
     uxrStreamId reliable_in;
-    uxrStreamId besteffort_in;
 
     // Output Stream
     uint8_t output_reliable_stream[BUFFER_SIZE_SERIAL];
@@ -66,19 +65,6 @@ private:
     tf2_msgs_msg_TFMessage static_transforms_topic;
     sensor_msgs_msg_BatteryState battery_state_topic;
 
-    // Subscriber callback
-    static void on_topic(
-        uxrSession* session,
-        uxrObjectId object_id,
-        uint16_t request_id,
-        uxrStreamId stream_id,
-        struct ucdrBuffer* ub,
-        uint16_t length,
-        void* args);
-
-    uint32_t count = 0;
-
-    // HAL semaphore
     HAL_Semaphore csem;
 
     // connection parametrics
@@ -89,6 +75,20 @@ private:
     static void populate_static_transforms(tf2_msgs_msg_TFMessage& msg);
     static void update_topic(sensor_msgs_msg_BatteryState& msg, const uint8_t instance);
 
+    // subscription callback function
+    static void on_topic(uxrSession* session, uxrObjectId object_id, uint16_t request_id, uxrStreamId stream_id, struct ucdrBuffer* ub, uint16_t length, void* args);
+    
+    // count of subscribed samples
+    uint32_t count;
+    
+    // delivery control parameters
+    uxrDeliveryControl delivery_control = {
+        .max_samples = UXR_MAX_SAMPLES_UNLIMITED,
+        .max_elapsed_time = 0,
+        .max_bytes_per_second = 0,
+        .min_pace_period = 0
+    };
+    
     // The last ms timestamp AP_DDS wrote a Time message
     uint64_t last_time_time_ms;
     // The last ms timestamp AP_DDS wrote a NavSatFix message
@@ -135,7 +135,9 @@ public:
     struct Topic_table {
         const uint8_t topic_id;
         const uint8_t pub_id;
+        const uint8_t sub_id;  // added sub_id fields to avoid confusion
         const uxrObjectId dw_id;
+        const uxrObjectId dr_id; // added dr_id fields to avoid confusion
         const char* topic_profile_label;
         const char* dw_profile_label;
         const char* dr_profile_label;
