@@ -5,7 +5,6 @@
 #include <AP_GPS/AP_GPS.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_RTC/AP_RTC.h>
-#include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_Math/AP_Math.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_BattMonitor/AP_BattMonitor.h>
@@ -18,17 +17,26 @@ static char WGS_84_FRAME_ID[] = "WGS-84";
 // https://www.ros.org/reps/rep-0105.html#base-link
 static char BASE_LINK_FRAME_ID[] = "base_link";
 
-AP_HAL::UARTDriver *dds_port;
+const AP_Param::GroupInfo AP_DDS_Client::var_info[] {
 
+    // @Param: _ENABLED
+    // @DisplayName: DDS enable
+    // @Description: Enable DDS subsystem
+    // @Values: 0:Disabled,1:Enabled
+    // @RebootRequired: True
+    // @User: Advanced
+    AP_GROUPINFO_FLAGS("_ENABLED", 1, AP_DDS_Client, enabled, 0, AP_PARAM_FLAG_ENABLE),
 
-const AP_Param::GroupInfo AP_DDS_Client::var_info[]= {
-    //! @todo Params go here
-    // @Param: TRANSPORT_TYPE
-    // @DisplayName: DDS_TRANSPORT_TYPE
-    // @Description: Type of XRCE protocol to use
-    // @Values: 0:Serial,1:UDP
+#if AP_DDS_UDP_ENABLED
+    // @Param: _UDP_PORT
+    // @DisplayName: DDS UDP port
+    // @Description: UDP port number for DDS
+    // @Range: 1 65535
+    // @RebootRequired: True
     // @User: Standard
-    AP_GROUPINFO("TRANSPORT",1,AP_DDS_Client,ddsTransportType,1),
+    AP_GROUPINFO("_PORT", 2, AP_DDS_Client, udp_port, 2019),
+#endif
+    
     AP_GROUPEND
 };
 
@@ -250,15 +258,24 @@ void AP_DDS_Client::update_topic(sensor_msgs_msg_BatteryState& msg, const uint8_
 }
 
 /*
-  class constructor
+  start the DDS thread
  */
-AP_DDS_Client::AP_DDS_Client(void)
+bool AP_DDS_Client::start(void)
 {
+    AP_Param::setup_object_defaults(this, var_info);
+    AP_Param::load_object_from_eeprom(this, var_info);
+
+    if (enabled == 0) {
+        return true;
+    }
+
     if (!hal.scheduler->thread_create(FUNCTOR_BIND_MEMBER(&AP_DDS_Client::main_loop, void),
                                       "DDS",
                                       8192, AP_HAL::Scheduler::PRIORITY_IO, 1)) {
         GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"DDS Client: thread create failed");
+        return false;
     }
+    return true;
 }
 
 /*
@@ -281,18 +298,12 @@ void AP_DDS_Client::main_loop(void)
     }
 }
 
-bool AP_DDS_Client::ddsSerialInit(){
-    AP_SerialManager *serial_manager = AP_SerialManager::get_singleton();
-    dds_port = serial_manager->find_serial(AP_SerialManager::SerialProtocol_DDS_XRCE, 0);
-    if (dds_port == nullptr) {
-        return false;
-    }
-    // ensure we own the UART
-    dds_port->begin(0);
+bool AP_DDS_Client::ddsSerialInit()
+{
     constexpr uint8_t fd = 0;
     constexpr uint8_t relativeSerialAgentAddr = 0;
     constexpr uint8_t relativeSerialClientAddr = 1;
-    if (!uxr_init_serial_transport(&serial_transport,fd,relativeSerialAgentAddr,relativeSerialClientAddr)) {
+    if (!uxr_init_serial_transport(&serial_transport, fd, relativeSerialAgentAddr, relativeSerialClientAddr)) {
         return false;
     }
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
@@ -301,27 +312,35 @@ bool AP_DDS_Client::ddsSerialInit(){
     return true;
 }
 
-bool AP_DDS_Client::ddsUdpInit(){
-    //TODO udp port to be configured for real hardware
+#if AP_DDS_UDP_ENABLED
+bool AP_DDS_Client::ddsUdpInit()
+{
+    char port_string[10];
+    hal.util->snprintf(port_string, sizeof(port_string), "%u", udp_port.get());
 
-    if (!uxr_init_udp_transport(&udp_transport,UXR_IPv4,ip,udpPort)) {
+    if (!uxr_init_udp_transport(&udp_transport, UXR_IPv4, ip, port_string)) {
         return false;
     }
     constexpr uint32_t uniqueClientKey = 0xAAAABBBB;
     uxr_init_session(&session, &udp_transport.comm, uniqueClientKey);
     return true;
 }
+#endif // AP_DDS_UDP_ENABLED
 
 bool AP_DDS_Client::init()
 {
-    bool initTransportStatus = false;
+    // serial init will fail if the SERIALn_PROTOCOL is not setup
+    bool initTransportStatus = ddsSerialInit();
+    is_serial = initTransportStatus;
 
-    if(ddsTransportType == DDS_SERIAL){
-        initTransportStatus = ddsSerialInit();
-    }else{
+#if AP_DDS_UDP_ENABLED
+    // fallback to UDP if available
+    if (!initTransportStatus) {
         initTransportStatus = ddsUdpInit();
     }
-    if(!initTransportStatus){
+#endif
+
+    if (!initTransportStatus) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Transport Initialization failed");
         return false;
     }
@@ -330,15 +349,19 @@ bool AP_DDS_Client::init()
         hal.scheduler->delay(1000);
     }
 
-    reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-    reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-    if(ddsTransportType == DDS_SERIAL){
-        reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-        reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_SERIAL,STREAM_HISTORY);
-    }else if(ddsTransportType == DDS_UDP){
-        reliable_in = uxr_create_input_reliable_stream(&session,input_reliable_stream,BUFFER_SIZE_UDP,STREAM_HISTORY);
-        reliable_out = uxr_create_output_reliable_stream(&session,output_reliable_stream,BUFFER_SIZE_UDP,STREAM_HISTORY);
+    reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
+    reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_SERIAL, STREAM_HISTORY);
+
+    if (is_serial) {
+        reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_SERIAL,STREAM_HISTORY);
     }
+#if AP_DDS_UDP_ENABLED
+    else {
+        reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, BUFFER_SIZE_UDP, STREAM_HISTORY);
+    }
+#endif
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Init Complete");
 
@@ -497,81 +520,6 @@ void AP_DDS_Client::update()
     }
 
     connected = uxr_run_session_time(&session, 1);
-}
-
-/*
-  implement C functions for serial transport
- */
-extern "C" {
-#include <uxr/client/profile/transport/serial/serial_transport_platform.h>
-#include <uxr/client/profile/transport/ip/udp/udp_transport.h>
-}
-bool uxr_init_udp_platform(uxrUDPPlatform* platform, uxrIpProtocol ip_protocol, const char* ip, const char* port)
-{
-    //! @todo Add error reporting
-    return true;
-}
-bool uxr_close_udp_platform(uxrUDPPlatform* platform){
-    //! @todo Add error reporting
-    return true;
-}
-/*
-
-size_t uxr_write_udp_data_platform (uxrUDPPlatform* platform, const uint8_t* buf, size_t len, uint8_t* errcode){
-
-}
-
-size_t uxr_read_udp_data_platform (uxrUDPPlatform* platform, uint8_t* buf, size_t len, int timeout, uint8_t* errcode){
-
-}
-
-*/
-bool uxr_init_serial_platform(void* args, int fd, uint8_t remote_addr, uint8_t local_addr)
-{
-    //! @todo Add error reporting
-    return true;
-}
-
-bool uxr_close_serial_platform(void* args)
-{
-    //! @todo Add error reporting
-    return true;
-}
-
-size_t uxr_write_serial_data_platform(void* args, const uint8_t* buf, size_t len, uint8_t* errcode)
-{
-    if (dds_port == nullptr) {
-        *errcode = 1;
-        return 0;
-    }
-    ssize_t bytes_written = dds_port->write(buf, len);
-    if (bytes_written <= 0) {
-        *errcode = 1;
-        return 0;
-    }
-    //! @todo Add populate the error code correctly
-    *errcode = 0;
-    return bytes_written;
-}
-
-size_t uxr_read_serial_data_platform(void* args, uint8_t* buf, size_t len, int timeout, uint8_t* errcode)
-{
-    if (dds_port == nullptr) {
-        *errcode = 1;
-        return 0;
-    }
-    while (timeout > 0 && dds_port->available() < len) {
-        hal.scheduler->delay(1); // TODO select or poll this is limiting speed (1mS)
-        timeout--;
-    }
-    ssize_t bytes_read = dds_port->read(buf, len);
-    if (bytes_read <= 0) {
-        *errcode = 1;
-        return 0;
-    }
-    //! @todo Add error reporting
-    *errcode = 0;
-    return bytes_read;
 }
 
 #if CONFIG_HAL_BOARD != HAL_BOARD_SITL

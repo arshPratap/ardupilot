@@ -23,6 +23,9 @@
 #define BUFFER_SIZE_SERIAL UXR_CONFIG_SERIAL_TRANSPORT_MTU * STREAM_HISTORY
 #define BUFFER_SIZE_UDP    UXR_CONFIG_UDP_TRANSPORT_MTU * STREAM_HISTORY
 
+// UDP only on SITL for now
+#define AP_DDS_UDP_ENABLED (CONFIG_HAL_BOARD == HAL_BOARD_SITL)
+
 #define DDS_SERIAL 0
 #define DDS_UDP    1
 
@@ -33,19 +36,20 @@ class AP_DDS_Client
 
 private:
 
-    // Transport type
-    AP_Int8 ddsTransportType;
+    AP_Int8 enabled;
 
-    // UDP port
-    char* udpPort = "2019";
-    // IP
-    char* ip = "127.0.0.1"; 
+#if AP_DDS_UDP_ENABLED
+    AP_Int32 udp_port;
+    // UDP endpoint
+    const char* ip = "127.0.0.1";
     // UDP Allocation
     uxrUDPTransport udp_transport;
+#endif // AP_DDS_UDP_ENABLED
 
     // Serial Allocation
     uxrSerialTransport serial_transport; // client uxr serial transport
     uxrSession session; //Session
+    bool is_serial;
 
     // Input Stream
     uint8_t input_reliable_stream[BUFFER_SIZE_SERIAL];
@@ -80,13 +84,14 @@ private:
 
     // Initialization function for serial transport
     bool ddsSerialInit();
+
+#if AP_DDS_UDP_ENABLED
     // Initialization function for udp transport
     bool ddsUdpInit();
+#endif
 
 public:
-    // Constructor
-    AP_DDS_Client();
-
+    bool start(void);
     void main_loop(void);
 
     //! @brief Initialize the client's transport, uxr session, and IO stream(s)
