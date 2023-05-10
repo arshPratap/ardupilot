@@ -409,16 +409,15 @@ void AP_DDS_Client::on_topic (uxrSession* uxr_session, uxrObjectId object_id, ui
     TEMPLATE for reading to the subscribed topics
     1) Store the read contents into the ucdr buffer
     2) Deserialize the said contents into the topic instance
-    
     */
-    //HelloWorld topic;
-    //HelloWorld_deserialize_topic(ub, &topic);
+    sensor_msgs_msg_Joy topic;
+    sensor_msgs_msg_Joy_deserialize_topic(ub, &topic);
 
-    //printf("Received topic: %s, id: %i\n", topic.message, topic.index);
-
-    //uint32_t* count_ptr = (uint32_t*) args;
-    //(*count_ptr)++;
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"Recieved Data");
+    uint32_t* count_ptr = (uint32_t*) args;
+    (*count_ptr)++;
+    
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"Receivied sensor_msgs/Joy: %f, %f, %f, %f",
+        topic.axes[0], topic.axes[1], topic.axes[2], topic.axes[3]);
 }
 
 /*
@@ -458,6 +457,10 @@ bool AP_DDS_Client::init()
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Transport Initialization failed");
         return false;
     }
+
+    // Register topic callbacks
+    uxr_set_topic_callback(&session, AP_DDS_Client::on_topic, &count);
+
     while (!uxr_create_session(&session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
         hal.scheduler->delay(1000);

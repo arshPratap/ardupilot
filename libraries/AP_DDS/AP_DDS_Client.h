@@ -10,6 +10,7 @@
 #include "sensor_msgs/msg/NavSatFix.h"
 #include "tf2_msgs/msg/TFMessage.h"
 #include "sensor_msgs/msg/BatteryState.h"
+#include "sensor_msgs/msg/Joy.h"
 #include "geometry_msgs/msg/PoseStamped.h"
 #include "geometry_msgs/msg/TwistStamped.h"
 #include "geographic_msgs/msg/GeoPoseStamped.h"
@@ -58,6 +59,7 @@ private:
     sensor_msgs_msg_NavSatFix nav_sat_fix_topic;
     tf2_msgs_msg_TFMessage static_transforms_topic;
     sensor_msgs_msg_BatteryState battery_state_topic;
+    sensor_msgs_msg_Joy joy_topic;
     geometry_msgs_msg_PoseStamped local_pose_topic;
     geometry_msgs_msg_TwistStamped local_velocity_topic;
     geographic_msgs_msg_GeoPoseStamped geo_pose_topic;
