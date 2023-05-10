@@ -126,8 +126,8 @@ const struct AP_DDS_Client::Topic_table AP_DDS_Client::topics[] = {
         .topic_profile_label = "joy__t",
         .dw_profile_label = "",
         .dr_profile_label = "joy__dr",
-        .serialize = Generic_serialize_topic_fn_t(&sensor_msgs_msg_BatteryState_serialize_topic),
-        .deserialize = Generic_deserialize_topic_fn_t(&sensor_msgs_msg_BatteryState_deserialize_topic),
-        .size_of = Generic_size_of_topic_fn_t(&sensor_msgs_msg_BatteryState_size_of_topic),
+        .serialize = Generic_serialize_topic_fn_t(&sensor_msgs_msg_Joy_serialize_topic),
+        .deserialize = Generic_deserialize_topic_fn_t(&sensor_msgs_msg_Joy_deserialize_topic),
+        .size_of = Generic_size_of_topic_fn_t(&sensor_msgs_msg_Joy_size_of_topic),
     },
 };
