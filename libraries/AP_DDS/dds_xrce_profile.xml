@@ -231,7 +231,7 @@
     </topic>
   </data_writer>
   <topic profile_name="joy__t">
-    <name>rt/ROS2_Joy</name>
+    <name>rt/ap/joy</name>
     <dataType>sensor_msgs::msg::dds_::Joy_</dataType>
     <historyQos>
       <kind>KEEP_LAST</kind>
@@ -250,7 +250,7 @@
     </qos> -->
     <topic>
       <kind>NO_KEY</kind>
-      <name>rt/ROS2_Joy</name>
+      <name>rt/ap/joy</name>
       <dataType>sensor_msgs::msg::dds_::Joy_</dataType>
       <!-- <historyQos>
         <kind>KEEP_LAST</kind>
