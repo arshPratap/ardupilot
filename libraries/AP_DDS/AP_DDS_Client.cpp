@@ -401,6 +401,26 @@ bool AP_DDS_Client::start(void)
     return true;
 }
 
+// read function triggered at every subscription callback
+void AP_DDS_Client::on_topic (uxrSession* uxr_session, uxrObjectId object_id, uint16_t request_id, uxrStreamId stream_id, struct ucdrBuffer* ub, uint16_t length, void* args)
+{
+    (void) uxr_session; (void) object_id; (void) request_id; (void) stream_id; (void) length;
+    /*
+    TEMPLATE for reading to the subscribed topics
+    1) Store the read contents into the ucdr buffer
+    2) Deserialize the said contents into the topic instance
+    
+    */
+    //HelloWorld topic;
+    //HelloWorld_deserialize_topic(ub, &topic);
+
+    //printf("Received topic: %s, id: %i\n", topic.message, topic.index);
+
+    //uint32_t* count_ptr = (uint32_t*) args;
+    //(*count_ptr)++;
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,"Recieved Data");
+}
+
 /*
   main loop for DDS thread
  */
@@ -497,35 +517,72 @@ bool AP_DDS_Client::create()
         const char* topic_ref = topics[i].topic_profile_label;
         const auto topic_req_id = uxr_buffer_create_topic_ref(&session,reliable_out,topic_id,participant_id,topic_ref,UXR_REPLACE);
 
-        // Publisher
-        const uxrObjectId pub_id = {
-            .id = topics[i].pub_id,
-            .type = UXR_PUBLISHER_ID
-        };
-        const char* pub_xml = "";
-        const auto pub_req_id = uxr_buffer_create_publisher_xml(&session,reliable_out,pub_id,participant_id,pub_xml,UXR_REPLACE);
-
-        // Data Writer
-        const char* data_writer_ref = topics[i].dw_profile_label;
-        const auto dwriter_req_id = uxr_buffer_create_datawriter_ref(&session,reliable_out,topics[i].dw_id,pub_id,data_writer_ref,UXR_REPLACE);
-
         // Status requests
         constexpr uint8_t nRequests = 3;
-        const uint16_t requests[nRequests] = {topic_req_id, pub_req_id, dwriter_req_id};
+        uint16_t requests[nRequests]; 
         constexpr int requestTimeoutMs = nRequests * maxTimeMsPerRequestMs;
         uint8_t status[nRequests];
-        if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
-            GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Pub/Writer session request failure for index 'TODO'");
-            for (int s = 0 ; s < nRequests; s++) {
-                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
+
+        if(strlen(topics[i].dw_profile_label)) {
+            // Publisher
+            const uxrObjectId pub_id = {
+                .id = topics[i].pub_id,
+                .type = UXR_PUBLISHER_ID
+            };
+            const char* pub_xml = "";
+            const auto pub_req_id = uxr_buffer_create_publisher_xml(&session,reliable_out,pub_id,participant_id,pub_xml,UXR_REPLACE);
+
+            // Data Writer
+            const char* data_writer_ref = topics[i].dw_profile_label;
+            const auto dwriter_req_id = uxr_buffer_create_datawriter_ref(&session,reliable_out,topics[i].dw_id,pub_id,data_writer_ref,UXR_REPLACE);
+
+            // save the request statuses
+            requests[0] = topic_req_id;
+            requests[1] = pub_req_id;
+            requests[2] = dwriter_req_id;
+
+            if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Pub/Writer session request failure for index 'TODO'");
+                for (int s = 0 ; s < nRequests; s++) {
+                    GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
+                }
+                // TODO add a failure log message sharing the status results
+                return false;
+            } else {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Pub/Writer session pass for index 'TOOO'");
             }
-            // TODO add a failure log message sharing the status results
-            return false;
-        } else {
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Pub/Writer session pass for index 'TOOO'");
+        }
+        else if(strlen(topics[i].dr_profile_label)) {
+            // Subscriber
+            const uxrObjectId sub_id = {
+                .id = topics[i].sub_id,
+                .type = UXR_SUBSCRIBER_ID
+            };
+            const char* sub_xml = "";
+            const auto sub_req_id = uxr_buffer_create_subscriber_xml(&session,reliable_out,sub_id,participant_id,sub_xml,UXR_REPLACE);
+
+            // Data Reader
+            const char* data_reader_ref = topics[i].dr_profile_label;
+            const auto dreader_req_id = uxr_buffer_create_datareader_ref(&session,reliable_out,topics[i].dr_id,sub_id,data_reader_ref,UXR_REPLACE);
+
+            // save the request statuses
+            requests[0] = topic_req_id;
+            requests[1] = sub_req_id;
+            requests[2] = dreader_req_id;
+
+            if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Sub/Reader session request failure for index '%d'",(int)i);
+                for (int s = 0 ; s < nRequests; s++) {
+                    GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
+                }
+                // TODO add a failure log message sharing the status results
+                return false;
+            } else {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Sub/Reader session pass for index '%d'",(int)i);
+                uxr_buffer_request_data(&session, reliable_out, topics[i].dr_id, reliable_in, &delivery_control);
+            }    
         }
     }
-
     return true;
 }
 

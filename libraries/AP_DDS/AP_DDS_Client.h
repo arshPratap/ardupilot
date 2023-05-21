@@ -77,6 +77,20 @@ private:
     static void update_topic(geographic_msgs_msg_GeoPoseStamped& msg);
     static void update_topic(rosgraph_msgs_msg_Clock& msg);
 
+    // subscription callback function
+    static void on_topic(uxrSession* session, uxrObjectId object_id, uint16_t request_id, uxrStreamId stream_id, struct ucdrBuffer* ub, uint16_t length, void* args);
+    
+    // count of subscribed samples
+    uint32_t count;
+    
+    // delivery control parameters
+    uxrDeliveryControl delivery_control = {
+        .max_samples = UXR_MAX_SAMPLES_UNLIMITED,
+        .max_elapsed_time = 0,
+        .max_bytes_per_second = 0,
+        .min_pace_period = 0
+    };
+
     // The last ms timestamp AP_DDS wrote a Time message
     uint64_t last_time_time_ms;
     // The last ms timestamp AP_DDS wrote a NavSatFix message
@@ -163,9 +177,12 @@ public:
     struct Topic_table {
         const uint8_t topic_id;
         const uint8_t pub_id;
+        const uint8_t sub_id;    // added sub_id fields to avoid confusion
         const uxrObjectId dw_id;
+        const uxrObjectId dr_id; // added dr_id fields to avoid confusion
         const char* topic_profile_label;
         const char* dw_profile_label;
+        const char* dr_profile_label;
         Generic_serialize_topic_fn_t serialize;
         Generic_deserialize_topic_fn_t deserialize;
         Generic_size_of_topic_fn_t size_of;

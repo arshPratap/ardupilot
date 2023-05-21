@@ -30,6 +30,13 @@
       </historyQos>
     </topic>
   </data_writer>
+  <data_reader profile_name="time__dr">
+    <topic>
+      <kind>NO_KEY</kind>
+      <name>rt/ROS2_Time</name>
+      <dataType>builtin_interfaces::msg::dds_::Time_</dataType>
+    </topic>
+  </data_reader>
   <topic profile_name="navsatfix0__t">
     <name>rt/ap/navsat/navsat0</name>
     <dataType>sensor_msgs::msg::dds_::NavSatFix_</dataType>
@@ -223,4 +230,32 @@
       </historyQos>
     </topic>
   </data_writer>
+  <topic profile_name="joy__t">
+    <name>rt/ROS2_Joy</name>
+    <dataType>sensor_msgs::msg::dds_::Joy_</dataType>
+    <historyQos>
+      <kind>KEEP_LAST</kind>
+      <depth>5</depth>
+    </historyQos>
+  </topic>
+  <data_reader profile_name="joy__dr">
+    <!-- <historyMemoryPolicy>PREALLOCATED_WITH_REALLOC</historyMemoryPolicy>
+    <qos>
+      <reliability>
+        <kind>BEST_EFFORT</kind>
+      </reliability>
+      <durability>
+        <kind>VOLATILE</kind>
+      </durability>
+    </qos> -->
+    <topic>
+      <kind>NO_KEY</kind>
+      <name>rt/ROS2_Joy</name>
+      <dataType>sensor_msgs::msg::dds_::Joy_</dataType>
+      <!-- <historyQos>
+        <kind>KEEP_LAST</kind>
+        <depth>5</depth>
+      </historyQos> -->
+    </topic>
+  </data_reader>
 </profiles>
