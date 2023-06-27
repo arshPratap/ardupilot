@@ -5,6 +5,8 @@
       <name>Ardupilot_DDS_XRCE_Client</name>
     </rtps>
   </participant>
+  <replier profile_name="ArmMotors_Replier" service_name = "ArmMotorsService" request_type = "ArmMotors_Request" reply_type = "ArmMotors_Response">
+  </replier>
   <topic profile_name="time__t">
     <name>rt/ap/time</name>
     <dataType>builtin_interfaces::msg::dds_::Time_</dataType>

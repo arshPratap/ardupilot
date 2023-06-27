@@ -19,6 +19,10 @@ static constexpr uint16_t DELAY_LOCAL_VELOCITY_TOPIC_MS = 33;
 static constexpr uint16_t DELAY_GEO_POSE_TOPIC_MS = 33;
 static constexpr uint16_t DELAY_CLOCK_TOPIC_MS = 10;
 static char WGS_84_FRAME_ID[] = "WGS-84";
+
+static uxrStreamId reliable_in;
+static uxrStreamId reliable_out;
+
 // https://www.ros.org/reps/rep-0105.html#base-link
 static char BASE_LINK_FRAME_ID[] = "base_link";
 
@@ -433,6 +437,49 @@ void AP_DDS_Client::on_topic (uxrSession* uxr_session, uxrObjectId object_id, ui
 
 }
 
+#include "AP_DDS_Service_Table.h"
+
+void AP_DDS_Client::on_request(uxrSession* uxr_session, uxrObjectId object_id, uint16_t request_id, SampleIdentity* sample_id, ucdrBuffer* ub, uint16_t length, void* args){
+        
+    (void) object_id; (void) request_id; (void) length; (void) args;
+    
+    bool arm;
+    ucdr_deserialize_bool(ub,&arm);
+
+    if(arm == true) {
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Request for arming recieved");
+    } else {
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Request for disarming recieved");
+    }
+
+    const uxrObjectId replier_id = {
+        .id = services[0].rep_id,
+        .type = UXR_REPLIER_ID
+    };
+
+    uint8_t reply_buffer[8] = {
+        0
+    };
+
+    ucdrBuffer reply_ub;
+
+    // dummy code
+    // TODO : add arming/disarming checks here 
+    bool result = arm;
+
+    ucdr_init_buffer(&reply_ub, reply_buffer, sizeof(reply_buffer));
+    ucdr_serialize_bool(&reply_ub,result);
+
+    uxr_buffer_reply(uxr_session, reliable_out, replier_id, sample_id, reply_buffer, sizeof(reply_buffer));
+
+    if(result == true){
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Reply : Armed ");
+    }else{
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Reply : Disarmed ");
+    }
+    
+}
+
 /*
   main loop for DDS thread
  */
@@ -473,6 +520,9 @@ bool AP_DDS_Client::init()
 
     // Register topic callbacks
     uxr_set_topic_callback(&session, AP_DDS_Client::on_topic, &count);
+    
+    // ROS-2 Service : Register service request callbacks
+    uxr_set_request_callback(&session, AP_DDS_Client::on_request, 0);
 
     while (!uxr_create_session(&session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
@@ -598,6 +648,44 @@ bool AP_DDS_Client::create()
             }
         }
     }
+
+    // ROS-2 Service : else case for service requests
+
+    for (size_t i = 0; i < ARRAY_SIZE(services);i++){
+        
+        //status requests
+        constexpr uint8_t nRequests = 1;
+        uint16_t requests[nRequests];
+        constexpr uint16_t requestTimeoutMs = (uint8_t) nRequests * maxTimeMsPerRequestMs;
+        uint8_t status[nRequests];
+
+        if(strlen(services[i].rep_profile_label) > 0){
+            const uxrObjectId rep_id = {
+                .id = services[i].rep_id,
+                .type = UXR_REPLIER_ID
+            };
+            const char* replier_ref = services[i].rep_profile_label;    
+            const auto  replier_req_id = uxr_buffer_create_replier_ref(&session, reliable_out, rep_id, participant_id, replier_ref, UXR_REPLACE);
+
+            requests[0] = replier_req_id;
+
+            if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Service/Replier session request failure for index '%d'",(int)i);
+                for (uint8_t s = 0 ; s < nRequests; s++) {
+                    GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
+                }
+                // TODO add a failure log message sharing the status results
+                return false;
+            } else {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Service/Replier session pass for index '%d'",(int)i);
+                uxr_buffer_request_data(&session, reliable_out, rep_id, reliable_in, &delivery_control);
+            }
+
+        } else if (strlen(services[i].req_profile_label) > 0){
+            // TODO : Add Similar Code for Requester Profile
+        }
+    }
+
     return true;
 }
 

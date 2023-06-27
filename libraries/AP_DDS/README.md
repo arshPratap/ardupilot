@@ -230,7 +230,45 @@ Next, follow the associated section for your chosen transport, and finally you c
   ```
   In order to consume the transforms, it's highly recommended to [create and run a transform broadcaster in ROS 2](https://docs.ros.org/en/humble/Concepts/About-Tf2.html#tutorials).
 
+## Using ROS 2 services (with Integration Services)
 
+### Prerequisites
+- Install and setup [Micro-XRCE Agent](https://micro-xrce-dds.docs.eprosima.com/en/latest/installation.html#installing-the-agent-standalone)
+- Install and setup [Integration Services](https://micro-xrce-dds.docs.eprosima.com/en/latest/installation.html#installing-the-client-standalone) (it would be good to have a seperate workspace for this)
+  - Get System Handles for [ROS 2](https://github.com/eProsima/ROS2-SH)
+  - Get System Handles for [Fast-DDS](https://github.com/eProsima/FastDDS-SH)
+
+### Setup
+- Clone the [ardupilot_ros2](https://github.com/arshPratap/ardupilot_ros2) repo in your ROS 2 workspace
+- Switch to **ArmingClient** branch
+- Build the [ap_custom_services](https://github.com/arshPratap/ardupilot_ros2/tree/ArmingClient/ap_custom_services) package
+- Build the [ap_service_clients](https://github.com/arshPratap/ardupilot_ros2/tree/ArmingClient/ap_service_clients) package
+- In a new terminal, successfully source ROS 2 installation
+- Move to your ROS 2 workspace and source the installation (you should now see the above 2 pacakges when you run `ros2 pkg list`)
+- Move to your Integration Service workspace and use the following command to successfully link the ***ap_custom_services*** package with Integration Services `colcon build --cmake-args -DMIX_ROS_PACKAGES="ap_custom_services"`
+- Source the above Integration Service installation
+
+### Terminal 1 (XRCE Agent)
+- Move to the **AP_DDS** folder and run the XRCE Agent as follows `MicroXRCEAgent udp4 -p 2019 -r dds_xrce_profile.xml`
+
+### Terminal 2 (Integration Service)
+- Source ROS 2 installation
+- Source Integration Service installation
+- Move to the **AP_DDS** folder and run the following command `integration-service Is-Config/Arm_Motors_DDS_IS_config.yaml`
+
+### Terminal 3 (Ardupilot)
+- Make sure you have successfully setup Ardupilot and the `DDS_ENABLE` param is set to 1
+- Run SITL with the following command `sim_vehicle.py -v ArduPlane -DG --console --enable-dds`
+
+### Terminal 4 (ROS 2 Client)
+- Source ROS 2 installation
+- In your ROS 2 workspace source the installation of the above packages
+- The ROS 2 client takes in an argument for the total number of requests to be made to the Arming Server
+- Run a ROS 2 client as follows : `ros2 run ap_service_clients arm_motors_client 5` (here 5 is the number of requests to be made)
+- Once the client is running , pass in the following inputs
+  - `arm` for **Arming**
+  - `disarm` for **Disarming**
+ 
 ## Contributing to AP_DDS library
 ### Adding DDS messages to Ardupilot
 

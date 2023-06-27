@@ -50,8 +50,6 @@ private:
     // input and output stream
     uint8_t *input_reliable_stream;
     uint8_t *output_reliable_stream;
-    uxrStreamId reliable_in;
-    uxrStreamId reliable_out;
 
     // Topic
     builtin_interfaces_msg_Time time_topic;
@@ -83,6 +81,9 @@ private:
 
     // count of subscribed samples
     uint32_t count;
+
+    // service replier callback function
+    static void on_request(uxrSession* session, uxrObjectId object_id, uint16_t request_id, SampleIdentity* sample_id, ucdrBuffer* ub, uint16_t length, void* args);
 
     // delivery control parameters
     uxrDeliveryControl delivery_control {
@@ -187,7 +188,20 @@ public:
     };
     static const struct Topic_table topics[];
 
-
+    //! @brief Convenience grouping for a single "channel" of services
+    struct Service_table{
+        //req_id
+        const uint8_t req_id;
+        //rep_id
+        const uint8_t rep_id;
+        //service_profile_label
+        const char* srv_profile_label;
+        //requester_profile_label
+        const char* req_profile_label;
+        //replier_profile_label
+        const char* rep_profile_label;
+    };
+    static const struct Service_table services[];
 };
 
 #endif // AP_DDS_ENABLED
