@@ -51,8 +51,6 @@ private:
     // input and output stream
     uint8_t *input_reliable_stream;
     uint8_t *output_reliable_stream;
-    uxrStreamId reliable_in;
-    uxrStreamId reliable_out;
 
     // Topic
     builtin_interfaces_msg_Time time_topic;
@@ -81,10 +79,14 @@ private:
 
     // subscription callback function
     static void on_topic(uxrSession* session, uxrObjectId object_id, uint16_t request_id, uxrStreamId stream_id, struct ucdrBuffer* ub, uint16_t length, void* args);
-
     // count of subscribed samples
-    uint32_t count;
+    uint32_t subscribe_sample_count;
 
+    // service replier callback function
+    static void on_request(uxrSession* session, uxrObjectId object_id, uint16_t request_id, SampleIdentity* sample_id, ucdrBuffer* ub, uint16_t length, void* args);
+    // count of request samples
+    uint32_t request_sample_count;
+    
     // delivery control parameters
     uxrDeliveryControl delivery_control {
         .max_samples = UXR_MAX_SAMPLES_UNLIMITED,
@@ -188,7 +190,24 @@ public:
     };
     static const struct Topic_table topics[];
 
+    //! @brief Convenience grouping for a single "channel" of services
+    struct Service_table{
+        //! @brief Request ID for the service
+        const uint8_t req_id;
 
+        //! @brief Reply ID for the service
+        const uint8_t rep_id;
+        
+        //! @brief Profile Label for the service
+        const char* srv_profile_label;
+        
+        //! @brief Profile Label for the service requester
+        const char* req_profile_label;
+        
+        //! @brief Profile Label for the service replier
+        const char* rep_profile_label;
+    };
+    static const struct Service_table services[];
 };
 
 #endif // AP_DDS_ENABLED
