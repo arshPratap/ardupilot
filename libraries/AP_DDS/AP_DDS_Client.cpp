@@ -19,6 +19,11 @@ static constexpr uint16_t DELAY_LOCAL_VELOCITY_TOPIC_MS = 33;
 static constexpr uint16_t DELAY_GEO_POSE_TOPIC_MS = 33;
 static constexpr uint16_t DELAY_CLOCK_TOPIC_MS = 10;
 static char WGS_84_FRAME_ID[] = "WGS-84";
+
+// static because on_request is a static member function
+static uxrStreamId reliable_in;
+static uxrStreamId reliable_out;
+
 // https://www.ros.org/reps/rep-0105.html#base-link
 static char BASE_LINK_FRAME_ID[] = "base_link";
 
@@ -402,9 +407,8 @@ bool AP_DDS_Client::start(void)
 }
 
 // read function triggered at every subscription callback
-void AP_DDS_Client::on_topic (uxrSession* uxr_session, uxrObjectId object_id, uint16_t request_id, uxrStreamId stream_id, struct ucdrBuffer* ub, uint16_t length, void* args)
+void AP_DDS_Client::on_topic ([[maybe_unused]] uxrSession* uxr_session, uxrObjectId object_id, [[maybe_unused]] uint16_t request_id, [[maybe_unused]] uxrStreamId stream_id, struct ucdrBuffer* ub, [[maybe_unused]] uint16_t length, void* args)
 {
-    (void) uxr_session; (void) object_id; (void) request_id; (void) stream_id; (void) length;
     /*
     TEMPLATE for reading to the subscribed topics
     1) Store the read contents into the ucdr buffer
@@ -431,6 +435,54 @@ void AP_DDS_Client::on_topic (uxrSession* uxr_session, uxrObjectId object_id, ui
         break;
     }
 
+}
+
+#include "AP_DDS_Service_Table.h"
+
+void AP_DDS_Client::on_request([[maybe_unused]] uxrSession* uxr_session, uxrObjectId object_id, [[maybe_unused]] uint16_t request_id, SampleIdentity* sample_id, ucdrBuffer* ub, [[maybe_unused]] uint16_t length, void* args){
+    switch (object_id.id){
+        case services[to_underlying(ServiceIndex::ARMING_MOTORS)].rep_id:
+        bool arm;
+        const bool deserialize_success = ucdr_deserialize_bool(ub,&arm);
+        if(deserialize_success == false){
+            break;
+        }
+        
+        if(arm == true) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Request for arming recieved");
+        } else {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Request for disarming recieved");
+        }
+        
+        const uxrObjectId replier_id = {
+            .id = services[to_underlying(ServiceIndex::ARMING_MOTORS)].rep_id,
+            .type = UXR_REPLIER_ID
+        };
+        uint8_t reply_buffer[8] = {
+            0
+        };
+        ucdrBuffer reply_ub;
+
+        // dummy code
+        // TODO : add arming/disarming checks here 
+        bool result = arm;
+        ucdr_init_buffer(&reply_ub, reply_buffer, sizeof(reply_buffer));
+        const bool serialize_success = ucdr_serialize_bool(&reply_ub,result);
+        if(serialize_success == false){
+            break;
+        }
+
+        uint32_t* count_ptr = (uint32_t*) args;
+        (*count_ptr)++;
+
+        uxr_buffer_reply(uxr_session, reliable_out, replier_id, sample_id, reply_buffer, sizeof(reply_buffer));
+        if(result == true){
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Reply : Armed ");
+        }else{
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Reply : Disarmed ");
+        }
+        break;
+    }    
 }
 
 /*
@@ -472,7 +524,10 @@ bool AP_DDS_Client::init()
     }
 
     // Register topic callbacks
-    uxr_set_topic_callback(&session, AP_DDS_Client::on_topic, &count);
+    uxr_set_topic_callback(&session, AP_DDS_Client::on_topic, &subscribe_sample_count);
+    
+    // ROS-2 Service : Register service request callbacks
+    uxr_set_request_callback(&session, AP_DDS_Client::on_request, &request_sample_count);
 
     while (!uxr_create_session(&session)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO,"DDS Client: Initialization waiting...");
@@ -586,18 +641,56 @@ bool AP_DDS_Client::create()
             requests[2] = dreader_req_id;
 
             if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
-                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Sub/Reader session request failure for index '%d'",(int)i);
+                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Topic/Sub/Reader session request failure for index '%zu'",i);
                 for (uint8_t s = 0 ; s < nRequests; s++) {
                     GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
                 }
                 // TODO add a failure log message sharing the status results
                 return false;
             } else {
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Sub/Reader session pass for index '%d'",(int)i);
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Topic/Sub/Reader session pass for index '%zu'",i);
                 uxr_buffer_request_data(&session, reliable_out, topics[i].dr_id, reliable_in, &delivery_control);
             }
         }
     }
+
+    // ROS-2 Service : else case for service requests
+
+    for (size_t i = 0; i < ARRAY_SIZE(services);i++){
+        
+        //status requests
+        constexpr uint8_t nRequests = 1;
+        uint16_t requests[nRequests];
+        constexpr uint16_t requestTimeoutMs = (uint8_t) nRequests * maxTimeMsPerRequestMs;
+        uint8_t status[nRequests];
+
+        if(strlen(services[i].rep_profile_label) > 0){
+            const uxrObjectId rep_id = {
+                .id = services[i].rep_id,
+                .type = UXR_REPLIER_ID
+            };
+            const char* replier_ref = services[i].rep_profile_label;    
+            const auto  replier_req_id = uxr_buffer_create_replier_ref(&session, reliable_out, rep_id, participant_id, replier_ref, UXR_REPLACE);
+
+            requests[0] = replier_req_id;
+
+            if (!uxr_run_session_until_all_status(&session, requestTimeoutMs, requests, status, nRequests)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Service/Replier session request failure for index '%zu'",i);
+                for (uint8_t s = 0 ; s < nRequests; s++) {
+                    GCS_SEND_TEXT(MAV_SEVERITY_ERROR,"XRCE Client: Status '%d' result '%u'", s, status[s]);
+                }
+                // TODO add a failure log message sharing the status results
+                return false;
+            } else {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO,"XRCE Client: Service/Replier session pass for index '%zu'",i);
+                uxr_buffer_request_data(&session, reliable_out, rep_id, reliable_in, &delivery_control);
+            }
+
+        } else if (strlen(services[i].req_profile_label) > 0){
+            // TODO : Add Similar Code for Requester Profile
+        }
+    }
+
     return true;
 }
 
