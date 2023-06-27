@@ -791,4 +791,3 @@ int clock_gettime(clockid_t clockid, struct timespec *ts)
 
 #endif // AP_DDS_ENABLED
 
-
