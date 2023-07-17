@@ -1,4 +1,0 @@
-int8 mode
----
-bool status
-int8 curr_mode
