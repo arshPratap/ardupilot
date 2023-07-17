@@ -29,8 +29,8 @@ services:
                 topic: ArmMotorsService,
             },
             ros2: {
-                request_type: "ardupilot_msgs/ArmMotors:request",
-                reply_type: "ardupilot_msgs/ArmMotors:response"
+                request_type: "ap_custom_services/ArmMotors:request",
+                reply_type: "ap_custom_services/ArmMotors:response"
             }
         }
     }
