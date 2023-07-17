@@ -678,7 +678,7 @@ class IntegrationServiceLaunch:
         # - `config_file` is a positional argument
         args = [
             f"{command} ",
-            f"{config_file} ",
+            f"{config_file}",
         ]
 
         # Optional arguments.
@@ -686,14 +686,9 @@ class IntegrationServiceLaunch:
         is_prefix_path = LaunchConfiguration("is_prefix_path").perform(context)
         if is_prefix_path:
             for path in is_prefix_path.split(":"):
-                args.append("--is-prefix-path ")
-                args.append(f"{path} ")
+                args.append("--is-prefix-path")
+                args.append(path)
                 print(f"is_prefix_path:   {path}")
-
-        # debug information
-        # print()
-        # print(f"cmd: {args}")
-        # print()
 
         # Create action.
         action = ExecuteProcess(
